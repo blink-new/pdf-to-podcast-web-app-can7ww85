@@ -23,9 +23,39 @@ export function PDFUploadStep({ config, updateConfig, onNext }: PDFUploadStepPro
     const file = acceptedFiles[0];
     if (!file) return;
 
+    // Validate file type
+    if (file.type !== 'application/pdf') {
+      updateConfig({
+        processingStatus: {
+          ...config.processingStatus,
+          errors: ['Please upload a valid PDF file']
+        }
+      });
+      return;
+    }
+
+    // Validate file size (50MB limit)
+    if (file.size > 50 * 1024 * 1024) {
+      updateConfig({
+        processingStatus: {
+          ...config.processingStatus,
+          errors: ['File size must be less than 50MB']
+        }
+      });
+      return;
+    }
+
     setIsExtracting(true);
     setExtractionProgress(0);
     setValidationStatus('validating');
+
+    // Clear any previous errors
+    updateConfig({
+      processingStatus: {
+        ...config.processingStatus,
+        errors: []
+      }
+    });
 
     try {
       // Simulate progress updates
@@ -34,14 +64,18 @@ export function PDFUploadStep({ config, updateConfig, onNext }: PDFUploadStepPro
       }, 200);
 
       // Extract text from PDF using Blink SDK
-      const extractedText = await blink.data.extractFromUrl(URL.createObjectURL(file));
+      const extractedText = await blink.data.extractFromBlob(file);
       
       clearInterval(progressInterval);
       setExtractionProgress(100);
 
       // Validate extracted text
-      if (!extractedText || extractedText.trim().length < 100) {
-        throw new Error('PDF appears to be empty or contains insufficient text content');
+      if (!extractedText || typeof extractedText !== 'string') {
+        throw new Error('Failed to extract text from PDF. The file may be corrupted or password-protected.');
+      }
+
+      if (extractedText.trim().length < 50) {
+        throw new Error('PDF appears to contain very little text content. Please ensure your PDF has readable text.');
       }
 
       // Update config with successful extraction
@@ -68,10 +102,20 @@ export function PDFUploadStep({ config, updateConfig, onNext }: PDFUploadStepPro
     } catch (error) {
       console.error('PDF extraction failed:', error);
       setValidationStatus('error');
+      
+      let errorMessage = 'Failed to extract text from PDF';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       updateConfig({
         processingStatus: {
           ...config.processingStatus,
-          errors: [error instanceof Error ? error.message : 'Failed to extract text from PDF']
+          validations: {
+            ...config.processingStatus.validations,
+            pdfExtracted: false
+          },
+          errors: [errorMessage]
         }
       });
     } finally {
@@ -168,8 +212,30 @@ export function PDFUploadStep({ config, updateConfig, onNext }: PDFUploadStepPro
           {config.processingStatus.errors.length > 0 && (
             <Alert className="mt-4" variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {config.processingStatus.errors[0]}
+              <AlertDescription className="flex items-center justify-between">
+                <span>{config.processingStatus.errors[0]}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    updateConfig({
+                      pdfFile: null,
+                      pdfText: '',
+                      processingStatus: {
+                        ...config.processingStatus,
+                        errors: [],
+                        validations: {
+                          ...config.processingStatus.validations,
+                          pdfExtracted: false
+                        }
+                      }
+                    });
+                    setValidationStatus('idle');
+                  }}
+                  className="ml-4"
+                >
+                  Try Again
+                </Button>
               </AlertDescription>
             </Alert>
           )}

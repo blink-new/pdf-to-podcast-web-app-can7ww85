@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Upload Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .upload-area { 
+            border: 2px dashed #ccc; 
+            padding: 40px; 
+            text-align: center; 
+            margin: 20px 0;
+            cursor: pointer;
+        }
+        .upload-area:hover { border-color: #007bff; }
+        .result { margin: 20px 0; padding: 10px; background: #f8f9fa; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <h1>PDF Upload Test</h1>
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <p>Click here to select a PDF file</p>
+        <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+    </div>
+    <div id="result"></div>
+
+    <script type="module">
+        import { createClient } from 'https://unpkg.com/@blinkdotnew/sdk@latest/dist/index.js';
+        
+        const blink = createClient({
+            projectId: 'pdf-to-podcast-web-app-can7ww85',
+            authRequired: true
+        });
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="result">Processing PDF...</div>';
+
+            try {
+                console.log('Starting PDF extraction for file:', file.name, 'Size:', file.size);
+                
+                const extractedText = await blink.data.extractFromBlob(file);
+                
+                console.log('Extraction successful! Text length:', extractedText.length);
+                
+                resultDiv.innerHTML = `
+                    <div class="result success">
+                        <h3>Success!</h3>
+                        <p><strong>File:</strong> ${file.name}</p>
+                        <p><strong>Size:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p><strong>Extracted text length:</strong> ${extractedText.length.toLocaleString()} characters</p>
+                        <p><strong>Contains Hebrew:</strong> ${/[\u0590-\u05FF]/.test(extractedText) ? 'Yes' : 'No'}</p>
+                        <p><strong>First 200 characters:</strong></p>
+                        <pre style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">${extractedText.substring(0, 200)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('PDF extraction failed:', error);
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>Error!</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
